@@ -1,0 +1,2 @@
+#!/bin/bash
+python ${BASH_SOURCE[0]}.py
