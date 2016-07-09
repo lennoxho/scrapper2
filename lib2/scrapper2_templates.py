@@ -19,7 +19,10 @@ def std_preprocess(root_jobs):
     for url, _, _ in root_jobs:
         __visited_links.add(url)
 
-def std_process(request, base_url, id, jobs):
+def std_visit(request, base_url, id, jobs):
+    std_visit_template(request, base_url, id, jobs, __std_links_to_visit, __std_links_to_download)
+
+def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_download):
     soup = BeautifulSoup(request.text.replace('\n', '').replace('\r', ''), "html.parser")
     new_urls = []
 
@@ -64,10 +67,10 @@ def std_process(request, base_url, id, jobs):
     for new_url in new_urls:
         _, ext = os.path.splitext(new_url)
         # "both" is not used here
-        if ext in __std_links_to_visit:
+        if ext in links_to_visit:
             # id is not used here
             jobs.append((new_url, "visit", 0))
-        elif ext in __std_links_to_download:
+        elif ext in links_to_download:
             jobs.append((new_url, "download", 0))
 
 def std_download(request, url, id):

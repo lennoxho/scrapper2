@@ -1,5 +1,5 @@
 import sys
-import lib2.colorama.initialise; lib2.colorama.initialise.init()
+import colorama.initialise; colorama.initialise.init()
 
 if sys.version_info[0] < 3:
     # Use Python 2 compliant printing style

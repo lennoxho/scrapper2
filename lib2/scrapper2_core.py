@@ -16,9 +16,9 @@ import inspect
 
 
 #----------Global-Variables-START---------------------------
-__valid_traversal_modes = ("DFS", "BFS")
-__valid_tasks = ("visit", "download" "both")
-__http_OK = 200
+_valid_traversal_modes = ("DFS", "BFS")
+_valid_tasks = ("visit", "download" "both")
+_http_OK = 200
 #----------Global-Variables-END-----------------------------
 
 
@@ -64,7 +64,7 @@ class Scrapper:
             error_out("Invalid root jobs specified")
 
         if isinstance(traversal, str):
-            if traversal not in __valid_traversal_modes:
+            if traversal not in _valid_traversal_modes:
                 error_out("Unrecognised traversal mode")
             self.__scrapper_jobs = ScrapperJobs(root_jobs, traversal)
             post_info("Job list established")
@@ -150,7 +150,7 @@ class Scrapper:
 
                 success = False
                 r = curr_session.get(url, self.__timeout)
-                if r.status_code == __http_OK:
+                if r.status_code == _http_OK:
                     if task == "visit" or task == "both":
                         jobs = []
                         success = success and self.__visit_func(r, url, id, jobs)
@@ -282,7 +282,7 @@ class ScrapperJobs:
     def add_job(self, jobs):
         assert all(isinstance(job, tuple) and \
                    len(job) == 3 and \
-                   job[1] in __valid_tasks for job in jobs)
+                   job[1] in _valid_tasks for job in jobs)
         self.__job_lock.acquire()
         self.__container.extend(jobs)
         self.__cv.notify_all()
