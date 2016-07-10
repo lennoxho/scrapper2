@@ -1,5 +1,6 @@
 #----------Import-Modules-START-----------------------------
 import sys
+import urllib.parse
 #----------Import-Modules-END-------------------------------
 
 
@@ -10,6 +11,34 @@ __standard_msg_colour = { "black" : '30',  "red"    : '31',
                           "blue"  : '34',  "purple" : '35',
                           "cyan"  : '36',  "white"  : '37'  }
 #----------Global-Variables-END-----------------------------
+
+
+#----------General-Utilities-START--------------------------
+def valid_root_urls(root_jobs):
+    """
+    >>> valid_root_urls([])
+    True
+    >>> valid_root_urls([("http://rand", 0, 0), ("http://rand.com", 0, 0), ("http://rand.com/random", 0, 0)])
+    True
+    >>> valid_root_urls([("//rand.com", 0, 0)])
+    False
+    >>> valid_root_urls([("/rand.com", 0, 0)])
+    False
+    >>> valid_root_urls([("/rand.com", 0, 0)])
+    False
+    >>> valid_root_urls([("rand", 0, 0)])
+    False
+    >>> valid_root_urls([("http:rand", 0, 0)])
+    False
+    >>> valid_root_urls([("rand/random", 0, 0)])
+    False
+    """
+    for url, _, _ in root_jobs:
+        info = urllib.parse.urlsplit(url)
+        if info.scheme == '' or info.netloc == '':
+            return False
+    return True
+#----------General-Utilities-END----------------------------
 
 
 #----------Message-Utilities-START--------------------------
@@ -77,3 +106,12 @@ def error_out(err_msg, code=1, file=sys.stderr, en_colour=True):
     post_msg(err_msg, type="fatal error", file=file, colour="red", en_colour=en_colour)
     sys.exit(code)
 #----------Message-Utilities-END----------------------------
+
+
+if __name__ == "__main__":
+    import colorama.initialise; colorama.initialise.init()
+
+    post_info("Running doctests...")
+    import doctest
+    if doctest.testmod()[0] == 0:
+        post_success("All tests passed")

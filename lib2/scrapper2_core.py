@@ -6,7 +6,6 @@ import threading
 import requests
 from requests.packages.urllib3.util.retry import Retry as request_retry
 from requests.adapters import HTTPAdapter
-import urllib.parse
 
 import collections
 import time
@@ -46,13 +45,6 @@ class Scrapper:
     def sigint_handler(self, signal, frame):
         self.post(post_warning, "SIGINT received")
         self.signal_exit()
-
-    def valid_root_urls(self, root_jobs):
-        for url, _, _ in root_jobs:
-            info = urllib.parse.urlsplit(url)
-            if info.scheme == '' or info.netloc == '':
-                return False
-        return True
     #--------Scrapper-Class-Utilities-END-------------
 
     def __init__(self, root_jobs, preprocess_func=templates.std_preprocess, traversal="DFS", num_threads=1,
@@ -60,7 +52,7 @@ class Scrapper:
 
         if not isinstance(root_jobs, list) or \
            any(not (isinstance(entry, tuple) and len(entry) == 3) for entry in root_jobs) or \
-           not self.valid_root_urls(root_jobs):
+           not valid_root_urls(root_jobs):
             error_out("Invalid root jobs specified")
 
         if isinstance(traversal, str):

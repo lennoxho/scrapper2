@@ -14,6 +14,59 @@ __visited_links = set()
 #----------Global-Variables-END-----------------------------
 
 
+#----------Utility-functions-START--------------------------
+def format_url(url, base_url):
+    '''
+    Assumes url and base_url are well formed.
+
+    >>> format_url("http://rand.com/random", "http://rand.com")
+    'http://rand.com/random'
+    >>> format_url("http://rand.com/", "http://rand.com")
+    'http://rand.com/'
+    >>> format_url("", "http://rand.com") is None
+    True
+    >>> format_url("//rand.com", "http://rand.com")
+    'http://rand.com'
+    >>> format_url("//rand.com/random", "http://rand.com")
+    'http://rand.com/random'
+    >>> format_url("/random", "http://rand.com")
+    'http://rand.com/random'
+    >>> format_url("/random/ram", "http://rand.com")
+    'http://rand.com/random/ram'
+    >>> format_url("./random", "http://rand.com/ram")
+    'http://rand.com/ram/random'
+    >>> format_url("./random", "http://rand.com/ram/")
+    'http://rand.com/ram/random'
+    >>> format_url("random/rand", "http://rand.com/ram")
+    'http://rand.com/ram/random/rand'
+    >>> format_url("/random/rand", "http://rand.com/ram")
+    'http://rand.com/random/rand'
+    '''
+    if url == '':
+        return None
+
+    info = urllib.parse.urlsplit(url)
+    if info.netloc == '':
+        path = info.path
+        if path.startswith('/'):
+            base_info = urllib.parse.urlsplit(base_url)
+            base_loc = base_info.scheme + "://" + base_info.netloc
+
+            return posixpath.join(base_loc, path[1:])
+
+        rel_path = path
+        if rel_path.startswith("./"):
+            rel_path = rel_path[2:]
+        return posixpath.join(base_url, rel_path)
+
+    elif info.scheme == '':
+        return "http:" + url
+
+    else:
+        return url
+#----------Utility-functions-END----------------------------
+
+
 #----------Template-functions-START-------------------------
 def std_preprocess(root_jobs):
     for url, _, _ in root_jobs:
@@ -27,34 +80,10 @@ def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_dow
     new_urls = []
 
     #--------std_process-Utilities-START-------------
-    def format_url(url, base_url):
-        '''
-        Assumes url and base_url are well formed.
-        '''
-        info = urllib.parse.urlsplit(url)
-        if info.netloc == '':
-            path = info.path
-            if path.startswith('/'):
-                base_info = urllib.parse.urlsplit(base_url)
-                base_loc = base_info.scheme + "://" + base_info.netloc
-
-                return posixpath.join(base_loc, path[1:])
-
-            rel_path = path
-            if rel_path.startswith("./"):
-                rel_path = rel_path[2:]
-            return posixpath.join(base_url, rel_path)
-
-        elif info.scheme == '':
-            return "http:" + url
-
-        else:
-            return url
-
     def find_and_add_url(tag, attr):
         for div in soup.find_all(tag):
             new_url = format_url(div.get(attr), base_url)
-            if new_url not in __visited_links:
+            if new_url is not None and new_url not in __visited_links:
                 new_urls.append(new_url)
     #--------std_process-Utilities-START-------------
 
@@ -103,5 +132,15 @@ def std_report_header(header, success, url, task, id):
     pass
 
 def std_nok(status_code, url, task, id):
-    return True
+    return False
 #----------Template-functions-END---------------------------
+
+
+if __name__ == "__main__":
+    import colorama.initialise; colorama.initialise.init()
+    from scrapper2_utils import *
+
+    post_info("Running doctests...")
+    import doctest
+    if doctest.testmod()[0] == 0:
+        post_success("All tests passed")
