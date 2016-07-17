@@ -2,6 +2,8 @@
 import os
 import posixpath
 import urllib.parse
+import threading
+
 from bs4 import BeautifulSoup
 #----------Import-Modules-END-------------------------------
 
@@ -11,10 +13,27 @@ __std_links_to_visit = [".html"]
 __std_links_to_download = [".jpg", ".png", ".jpeg", ".mp4", ".wmv", ".avi"]
 __std_chunk_size = 1024
 __visited_links = set()
+__file_lock = threading.Lock()
 #----------Global-Variables-END-----------------------------
 
 
 #----------Utility-functions-START--------------------------
+def format_previous_directory(url):
+    """
+    >>> format_previous_directory('http://www.example.com/foo/bar/../../baz/bux/')
+    'http://www.example.com/baz/bux/'
+    >>> format_previous_directory('http://www.example.com/some/path/../file.ext')
+    'http://www.example.com/some/file.ext'
+    >>> format_previous_directory('http://www.example.com/some/../path/../file.ext')
+    'http://www.example.com/file.ext'
+    """
+    parsed = urllib.parse.urlparse(url)
+    new_path = posixpath.normpath(parsed.path)
+    if parsed.path.endswith('/'):
+        new_path += '/'
+    cleaned = parsed._replace(path=new_path)
+    return cleaned.geturl()
+
 def format_url(url, base_url):
     '''
     Assumes url and base_url are well formed.
@@ -34,11 +53,11 @@ def format_url(url, base_url):
     >>> format_url("/random/ram", "http://rand.com")
     'http://rand.com/random/ram'
     >>> format_url("./random", "http://rand.com/ram")
-    'http://rand.com/ram/random'
+    'http://rand.com/random'
     >>> format_url("./random", "http://rand.com/ram/")
     'http://rand.com/ram/random'
     >>> format_url("random/rand", "http://rand.com/ram")
-    'http://rand.com/ram/random/rand'
+    'http://rand.com/random/rand'
     >>> format_url("/random/rand", "http://rand.com/ram")
     'http://rand.com/random/rand'
     '''
@@ -52,18 +71,33 @@ def format_url(url, base_url):
             base_info = urllib.parse.urlsplit(base_url)
             base_loc = base_info.scheme + "://" + base_info.netloc
 
-            return posixpath.join(base_loc, path[1:])
+            ret = posixpath.join(base_loc, path[1:])
+            if info.query != '':
+                ret = ret + '?' + info.query
+                
+            return ret
 
         rel_path = path
         if rel_path.startswith("./"):
             rel_path = rel_path[2:]
-        return posixpath.join(base_url, rel_path)
+        
+        ret = posixpath.join(os.path.dirname(base_url), rel_path)
+        if info.query != '':
+            ret = ret + '?' + info.query
+        return  ret
 
     elif info.scheme == '':
         return "http:" + url
 
     else:
         return url
+        
+def format_url_with_resolution(url, base_url):
+    new_url = format_url(url, base_url)
+    if new_url is not None:
+        new_url = format_previous_directory(new_url)
+
+    return new_url
 #----------Utility-functions-END----------------------------
 
 
@@ -73,24 +107,26 @@ def std_preprocess(root_jobs):
         __visited_links.add(url)
 
 def std_visit(request, base_url, id, jobs):
-    std_visit_template(request, base_url, id, jobs, __std_links_to_visit, __std_links_to_download)
+    return std_visit_template(request, request.url, id, jobs, __std_links_to_visit, __std_links_to_download)
 
 def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_download):
-    soup = BeautifulSoup(request.text.replace('\n', '').replace('\r', ''), "html.parser")
     new_urls = []
-
+    
     #--------std_process-Utilities-START-------------
-    def find_and_add_url(tag, attr):
+    def find_and_add_url(tag, attr, soup):
         for div in soup.find_all(tag):
-            new_url = format_url(div.get(attr), base_url)
+            new_url = format_url_with_resolution(div.get(attr), base_url)
             if new_url is not None and new_url not in __visited_links:
+                __visited_links.add(new_url)
                 new_urls.append(new_url)
     #--------std_process-Utilities-START-------------
-
-    find_and_add_url("a", "href")
-    find_and_add_url("img", "src")
-    find_and_add_url("source", "src")
-    find_and_add_url("video", "src")
+    
+    soup = BeautifulSoup(request.text.replace('\n', '').replace('\r', ''), "html.parser")
+    
+    find_and_add_url("a", "href", soup)
+    find_and_add_url("img", "src", soup)
+    find_and_add_url("source", "src", soup)
+    find_and_add_url("video", "src", soup)
 
     jobs.clear()
     for new_url in new_urls:
@@ -101,29 +137,38 @@ def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_dow
             jobs.append((new_url, "visit", 0))
         elif ext in links_to_download:
             jobs.append((new_url, "download", 0))
+    
+    return True
 
 def std_download(request, url, id):
-    path = urllib.parse.urlsplit(url).path
-    if path == '' or path == '/':
-        filename = urllib.parse.urlsplit(url).netloc
-    elif path.startswith('/'):
-        filename = path[1:]
-    else:
-        filename = path
+    url_info = urllib.parse.urlsplit(url)
 
+    path = url_info.path
+    if path != '' and path[0] == '/':
+        path = path[1:]
+    
+    filename = os.path.join(url_info.netloc, path)
+    filename = os.path.join("scrapper2_download", filename)
+    
     dirname = os.path.dirname(filename)
-    if dirname != "" and not os.path.isdir(dirname):
+
+    # synchronize file operations
+    __file_lock.acquire()
+    if dirname != "" and not os.path.exists(dirname):
         os.makedirs(dirname)
 
     if os.path.isfile(filename):
-        return
+        __file_lock.release()
+        return True
 
     hfile = open(filename, 'wb')
     for chunk in request.iter_content(chunk_size=__std_chunk_size):
         if chunk:
             hfile.write(chunk)
+    __file_lock.release()
 
     hfile.close()
+    return True
 
 def std_modify_header(header, url, task, id):
     pass

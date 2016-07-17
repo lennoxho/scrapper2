@@ -67,7 +67,7 @@ def post_msg(msg, type="info", end='\n', file=sys.stdout, colour="white", en_col
 
     begin_format = colour_format + "scrapper2 " + type + " : "
 
-    print(begin_format + msg + reset_format, end=end, file=file)
+    print(begin_format + msg + reset_format, end=end, file=file, flush=True)
 
 def post_info(info_msg, file=sys.stdout, en_colour=True):
     '''

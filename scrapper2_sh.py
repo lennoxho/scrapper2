@@ -77,8 +77,11 @@ if __name__ == "__main__":
         for url, task in args.root_jobs:
             scrapper2.post_info("    " + url + " - " + task)
 
-        scrapper2.post_info("Number of worker threads: " + str(args.num_threads))
-        scrapper2.post_info("Traversal method: " + args.traversal)
+        a_threads = args.num_threads[0] if isinstance(args.num_threads, list) else args.num_threads
+        a_traversal = args.traversal[0] if isinstance(args.traversal, list) else args.traversal
+            
+        scrapper2.post_info("Number of worker threads: " + str(a_threads))
+        scrapper2.post_info("Traversal method: " + a_traversal)
         scrapper2.post_info("Silent: " + str(args.silent))
         scrapper2.post_info("logging: " + str(not args.no_log))
         scrapper2.post_info("colour: " + str(not args.no_colour))
@@ -89,6 +92,6 @@ if __name__ == "__main__":
             root_jobs.append((url, task, 0))
 
         scrapper2.post_info("Creating Scrapper...")
-        scrapper = scrapper2.Scrapper(root_jobs, traversal=args.traversal, num_threads=args.num_threads, silent=args.silent, log=(not args.no_log), colour=(not args.no_colour), tenacious=args.tenacious)
+        scrapper = scrapper2.Scrapper(root_jobs, traversal=a_traversal, num_threads=a_threads, silent=args.silent, log=(not args.no_log), colour=(not args.no_colour), tenacious=args.tenacious)
         scrapper2.post_info("Starting Scrapper...")
-        #scrapper.start()
+        scrapper.start()

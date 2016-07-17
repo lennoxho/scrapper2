@@ -11,12 +11,13 @@ import collections
 import time
 import signal
 import inspect
+import sys
 #----------Import-Modules-END-------------------------------
 
 
 #----------Global-Variables-START---------------------------
 _valid_traversal_modes = ("DFS", "BFS")
-_valid_tasks = ("visit", "download" "both")
+_valid_tasks = ("visit", "download", "both")
 _http_OK = 200
 #----------Global-Variables-END-----------------------------
 
@@ -86,7 +87,7 @@ class Scrapper:
         self.__post_lock = threading.Lock()
         if self.__log:
             try:
-                self.__log_file = open("scrapper2_" + time.strftime("%Y%m%d_%H%M%S") + ".log", "wb")
+                self.__log_file = open("scrapper2_" + time.strftime("%Y%m%d_%H%M%S") + ".log", "w")
             except Exception as e:
                 error_out(str(e))
 
@@ -107,8 +108,11 @@ class Scrapper:
         self.__threads_started = True
 
         signal.signal(signal.SIGINT, self.sigint_handler)
-        while not self.exit_posted():
-            time.sleep(1)
+        while not self.exit_posted() and not self.__scrapper_jobs.is_done:
+            try:
+                time.sleep(1)
+            except InterruptedError:
+                pass
 
         for t in self.__thread_pool:
             t.join()
@@ -117,9 +121,9 @@ class Scrapper:
         if len(remaining_jobs) > 0:
             post_warning("Uncompleted jobs: ")
             for job in remaining_jobs:
-                post_warning("      " + job[0] + " - " + job[2])
+                post_warning("      " + str(job[0]) + " - " + str(job[1]))
 
-    def scrape(self, i, initial_header):
+    def scrape(self, i, initial_header):           
         self.post(post_info, "thread " + str(i) + " starting")
 
         curr_session = ScrapperSession(initial_header, self.__retries)
@@ -128,48 +132,53 @@ class Scrapper:
 
         while not self.exit_posted():
             try:
-                if (url, task, id) == (None, None):
+                if (url, task, id) == (None, None, None):
                     job = self.__scrapper_jobs.get_job()
                     if job is None:
                         break
 
                     url, task, id = job
 
-                self.post(post_info, "thread " + str(i) + " performing " + str(id) + " - " + task + " on " + url)
+                self.post(post_info, "thread " + str(i) + " performing " + str(id) + " - " + task + " " + url)
 
                 curr_header = curr_session.get_header()
                 self.__modify_header_func(curr_header, url, task, id)
-
-                success = False
+    
+                success = True
                 r = curr_session.get(url, self.__timeout)
+
                 if r.status_code == _http_OK:
                     if task == "visit" or task == "both":
                         jobs = []
                         success = success and self.__visit_func(r, url, id, jobs)
-                        self.__scrapper_jobs.add_job(jobs)
+                        if jobs != []:
+                            self.__scrapper_jobs.add_job(jobs)
                     if task == "download" or task == "both":
                         success = success and self.__download_func(r, url, id)
-
+                
                 curr_header = curr_session.get_header()
-                self.__report_header_func(curr_header, success, url, task, root_path, id)
+                self.__report_header_func(curr_header, success, url, task, id)
 
                 redo = False
                 if not success:
-                    self.post(post_failure, "thread " + str(i) + " failed to perform " + str(id) + " - " + task + " on " + url)
+                    self.post(post_failure, "thread " + str(i) + " failed to perform " + str(id) + " - " + task + " on " + url + ' (' + str(r.status_code) + ')')
                     redo = self.__nok_func(r.status_code, url, task, id)
-                else:
-                    self.post(post_success, "thread " + str(i) + " will redo " + str(id) + " - " + task + " on " + url)
 
                 if not redo:
                     if not success:
                         self.post(post_warning, "job skipped " + str(id) + " - " + task + " on " + url)
-                    url, task, id = None, None, None
                     self.__scrapper_jobs.done_job((url, task, id))
+                    url, task, id = None, None, None
                 else:
                     self.post(post_info, "thread " + str(i) + " will redo " + str(id) + " - " + task + " on " + url)
 
             except Exception as e:
-                self.post(post_error, "thread " + str(i) + " encountered error " + str(e) + " " + str(id) + " - " + task + " on " + url)
+                if isinstance(e, AssertionError):
+                    _, _, exc_tb = sys.exc_info()
+                    err_msg = "AssertionError at line " + str(exc_tb.tb_lineno) 
+                else:
+                    err_msg = str(e)
+                self.post(post_error, "thread " + str(i) + " encountered error " + err_msg + " (" + str(id) + " - " + task + " on " + url + ")")
                 if self.__tenacious:
                     curr_session = ScrapperSession(curr_header, self.__retries)
                 else:
@@ -272,9 +281,9 @@ class ScrapperJobs:
         self.__signal_done = False
 
     def add_job(self, jobs):
-        assert all(isinstance(job, tuple) and \
-                   len(job) == 3 and \
-                   job[1] in _valid_tasks for job in jobs)
+        assert all((isinstance(job, tuple) and \
+                    len(job) == 3 and \
+                    job[1] in _valid_tasks) for job in jobs)
         self.__job_lock.acquire()
         self.__container.extend(jobs)
         self.__cv.notify_all()
@@ -289,9 +298,8 @@ class ScrapperJobs:
     def get_job(self):
         self.__job_lock.acquire()
 
-        with self.__cv:
-            while len(self.__container) == 0 and not self.__signal_done:
-                self.__cv.wait()
+        while len(self.__container) == 0 and not self.__signal_done:
+            self.__cv.wait()
 
         if not self.__signal_done:
             if self.__traversal == "DFS":
@@ -311,10 +319,16 @@ class ScrapperJobs:
         '''
         self.__job_lock.acquire()
         self.__current_jobs.remove(job)
-        if self.__current_jobs == [] and len(self.__container) == 0:
+        if len(self.__current_jobs) == 0 and len(self.__container) == 0:
             self.__signal_done = True
             self.__cv.notify_all()
         self.__job_lock.release()
+        
+    def is_done():
+        self.__job_lock.acquire()
+        ret = self.__signal_done
+        self.__job_lock.release()
+        return ret
 
     def signal_exit(self):
         self.__job_lock.acquire()
