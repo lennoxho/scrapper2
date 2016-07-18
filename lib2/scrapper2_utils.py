@@ -51,9 +51,6 @@ def post_msg(msg, type="info", end='\n', file=sys.stdout, colour="white", en_col
 
     valid colours: "black", "red", "green", "yellow", "blue", "purple"
                    "cyan", "white"
-
-    add: import lib2.colorama.initialise; lib2.colorama.initialise.init()
-         to importing source files to enable colour output.
     '''
     type = "generic" if type not in __standard_msg_types else type
     if en_colour:
@@ -65,7 +62,7 @@ def post_msg(msg, type="info", end='\n', file=sys.stdout, colour="white", en_col
         colour_format = ""
         reset_format = ""
 
-    begin_format = colour_format + "scrapper2 " + type + " : "
+    begin_format = colour_format + "scrapper2 " + type.ljust(12) + ": "
 
     print(begin_format + msg + reset_format, end=end, file=file, flush=True)
 
@@ -108,6 +105,7 @@ def error_out(err_msg, code=1, file=sys.stderr, en_colour=True):
 #----------Message-Utilities-END----------------------------
 
 
+#----------Main-START---------------------------------------
 if __name__ == "__main__":
     import colorama.initialise; colorama.initialise.init()
 
@@ -115,3 +113,4 @@ if __name__ == "__main__":
     import doctest
     if doctest.testmod()[0] == 0:
         post_success("All tests passed")
+#----------Main-END-----------------------------------------

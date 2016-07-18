@@ -1,12 +1,18 @@
+#----------Import-Modules-START-----------------------------
 import scrapper2
+
 import argparse
+import time
 import urllib.parse
+#----------Import-Modules-END-------------------------------
 
 
 #----------Global-Variables-START---------------------------
 __test_mode = False
 #----------Global-Variables-END-----------------------------
 
+
+#----------Utilities-START----------------------------------
 def jobs(s):
     """
     >>> jobs("http://rand.com/hello,visit")
@@ -46,8 +52,10 @@ def jobs(s):
         if not __test_mode:
             scrapper2.post_error(str(e) + "\n")
         raise argparse.ArgumentTypeError("Jobs must be tuples of (URL, task)")
+#----------Utilities-END------------------------------------
 
 
+#----------Main-START---------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Command line interface for scrapper2.")
 
@@ -79,7 +87,7 @@ if __name__ == "__main__":
 
         a_threads = args.num_threads[0] if isinstance(args.num_threads, list) else args.num_threads
         a_traversal = args.traversal[0] if isinstance(args.traversal, list) else args.traversal
-            
+
         scrapper2.post_info("Number of worker threads: " + str(a_threads))
         scrapper2.post_info("Traversal method: " + a_traversal)
         scrapper2.post_info("Silent: " + str(args.silent))
@@ -93,5 +101,13 @@ if __name__ == "__main__":
 
         scrapper2.post_info("Creating Scrapper...")
         scrapper = scrapper2.Scrapper(root_jobs, traversal=a_traversal, num_threads=a_threads, silent=args.silent, log=(not args.no_log), colour=(not args.no_colour), tenacious=args.tenacious)
+
         scrapper2.post_info("Starting Scrapper...")
+        start_time = time.clock()
+
         scrapper.start()
+
+        scrapper2.post_info("Scrapper exiting...")
+        elapsed_time = time.clock() - start_time
+        scrapper2.post_info("Time elapsed : " + str(elapsed_time) + " seconds")
+#----------Main-END-----------------------------------------

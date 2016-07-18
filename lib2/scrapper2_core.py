@@ -2,11 +2,11 @@
 from lib2.scrapper2_utils import *
 import lib2.scrapper2_templates as templates
 
-import threading
 import requests
 from requests.packages.urllib3.util.retry import Retry as request_retry
 from requests.adapters import HTTPAdapter
 
+import threading
 import collections
 import time
 import signal
@@ -34,8 +34,12 @@ class Scrapper:
     #--------Scrapper-Class-Utilities-START-----------
     def post(self, msg_func, *args):
         '''
+        Synchronized wrapper for the message printing functions.
+
         Do not use error_out with this function!
         '''
+        assert msg_func != error_out
+
         self.__post_lock.acquire()
         if not self.__silent:
             msg_func(*args, en_colour=self.__colour)
@@ -54,15 +58,15 @@ class Scrapper:
         if not isinstance(root_jobs, list) or \
            any(not (isinstance(entry, tuple) and len(entry) == 3) for entry in root_jobs) or \
            not valid_root_urls(root_jobs):
-            error_out("Invalid root jobs specified")
+            error_out("Invalid root jobs")
 
         if isinstance(traversal, str):
             if traversal not in _valid_traversal_modes:
-                error_out("Unrecognised traversal mode")
+                error_out("Invalid traversal mode")
             self.__scrapper_jobs = ScrapperJobs(root_jobs, traversal)
-            post_info("Job list established")
+            post_info("Job list created")
         else:
-            error_out("traversal mode must be a string")
+            error_out("Traversal mode must be a string")
 
         preprocess_func(root_jobs)
 
@@ -123,7 +127,7 @@ class Scrapper:
             for job in remaining_jobs:
                 post_warning("      " + str(job[0]) + " - " + str(job[1]))
 
-    def scrape(self, i, initial_header):           
+    def scrape(self, i, initial_header):
         self.post(post_info, "thread " + str(i) + " starting")
 
         curr_session = ScrapperSession(initial_header, self.__retries)
@@ -143,11 +147,11 @@ class Scrapper:
 
                 curr_header = curr_session.get_header()
                 self.__modify_header_func(curr_header, url, task, id)
-    
-                success = True
+
                 r = curr_session.get(url, self.__timeout)
 
-                if r.status_code == _http_OK:
+                success = r.status_code == _http_OK
+                if success:
                     if task == "visit" or task == "both":
                         jobs = []
                         success = success and self.__visit_func(r, url, id, jobs)
@@ -155,7 +159,7 @@ class Scrapper:
                             self.__scrapper_jobs.add_job(jobs)
                     if task == "download" or task == "both":
                         success = success and self.__download_func(r, url, id)
-                
+
                 curr_header = curr_session.get_header()
                 self.__report_header_func(curr_header, success, url, task, id)
 
@@ -175,12 +179,18 @@ class Scrapper:
             except Exception as e:
                 if isinstance(e, AssertionError):
                     _, _, exc_tb = sys.exc_info()
-                    err_msg = "AssertionError at line " + str(exc_tb.tb_lineno) 
+                    err_msg = "AssertionError at line " + str(exc_tb.tb_lineno)
                 else:
                     err_msg = str(e)
-                self.post(post_error, "thread " + str(i) + " encountered error " + err_msg + " (" + str(id) + " - " + task + " on " + url + ")")
+
+                job_info = ''
+                if (url, task, id) != (None, None, None):
+                    job_info = ' (' + str(id) + " - " + task + " on " + url + ')'
+
+                self.post(post_error, "thread " + str(i) + " encountered error " + err_msg + job_info)
                 if self.__tenacious:
                     curr_session = ScrapperSession(curr_header, self.__retries)
+                    self.post(post_warning, "thread " + str(i) + " is creating a new Session")
                 else:
                     self.signal_exit()
 
@@ -238,7 +248,6 @@ class Scrapper:
 
         self.__retries = request_retry(total=retry_num, backoff_factor=backoff_factor)
         self.__timeout = timeout
-
 #----------Scrapper-Class-Definition-END--------------------
 
 
@@ -265,7 +274,6 @@ class ScrapperSession:
 
     def clear_cookies(self):
         self.__session.cookies.clear()
-
 #----------ScrapperSession-Class-Definition-END-------------
 
 
@@ -323,8 +331,8 @@ class ScrapperJobs:
             self.__signal_done = True
             self.__cv.notify_all()
         self.__job_lock.release()
-        
-    def is_done():
+
+    def is_done(self):
         self.__job_lock.acquire()
         ret = self.__signal_done
         self.__job_lock.release()
@@ -340,5 +348,4 @@ class ScrapperJobs:
         jobs = self.__current_jobs
         self.__job_lock.release()
         return jobs
-
 #----------ScrapperJobs-Class-Definition-END----------------

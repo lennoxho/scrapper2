@@ -74,13 +74,13 @@ def format_url(url, base_url):
             ret = posixpath.join(base_loc, path[1:])
             if info.query != '':
                 ret = ret + '?' + info.query
-                
+
             return ret
 
         rel_path = path
         if rel_path.startswith("./"):
             rel_path = rel_path[2:]
-        
+
         ret = posixpath.join(os.path.dirname(base_url), rel_path)
         if info.query != '':
             ret = ret + '?' + info.query
@@ -91,7 +91,7 @@ def format_url(url, base_url):
 
     else:
         return url
-        
+
 def format_url_with_resolution(url, base_url):
     new_url = format_url(url, base_url)
     if new_url is not None:
@@ -111,7 +111,7 @@ def std_visit(request, base_url, id, jobs):
 
 def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_download):
     new_urls = []
-    
+
     #--------std_process-Utilities-START-------------
     def find_and_add_url(tag, attr, soup):
         for div in soup.find_all(tag):
@@ -120,9 +120,9 @@ def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_dow
                 __visited_links.add(new_url)
                 new_urls.append(new_url)
     #--------std_process-Utilities-START-------------
-    
+
     soup = BeautifulSoup(request.text.replace('\n', '').replace('\r', ''), "html.parser")
-    
+
     find_and_add_url("a", "href", soup)
     find_and_add_url("img", "src", soup)
     find_and_add_url("source", "src", soup)
@@ -137,7 +137,7 @@ def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_dow
             jobs.append((new_url, "visit", 0))
         elif ext in links_to_download:
             jobs.append((new_url, "download", 0))
-    
+
     return True
 
 def std_download(request, url, id):
@@ -146,10 +146,10 @@ def std_download(request, url, id):
     path = url_info.path
     if path != '' and path[0] == '/':
         path = path[1:]
-    
+
     filename = os.path.join(url_info.netloc, path)
     filename = os.path.join("scrapper2_download", filename)
-    
+
     dirname = os.path.dirname(filename)
 
     # synchronize file operations
@@ -181,6 +181,7 @@ def std_nok(status_code, url, task, id):
 #----------Template-functions-END---------------------------
 
 
+#----------Main-START---------------------------------------
 if __name__ == "__main__":
     import colorama.initialise; colorama.initialise.init()
     from scrapper2_utils import *
@@ -189,3 +190,4 @@ if __name__ == "__main__":
     import doctest
     if doctest.testmod()[0] == 0:
         post_success("All tests passed")
+#----------Main-END-----------------------------------------
