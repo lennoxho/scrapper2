@@ -4,6 +4,7 @@ import scrapper2
 import argparse
 import time
 import urllib.parse
+import os
 #----------Import-Modules-END-------------------------------
 
 
@@ -52,6 +53,23 @@ def jobs(s):
         if not __test_mode:
             scrapper2.post_error(str(e) + "\n")
         raise argparse.ArgumentTypeError("Jobs must be tuples of (URL, task)")
+
+def get_jobs_from_ini(filename):
+    try:
+        hfile = open(filename, "r")
+    except Exception as e:
+        scrapper2.error_out(str(e) + " while opening " + filename)
+
+    jobs = []
+    for line in hfile:
+        line = line.strip()
+        if line != '':
+            val = line.split(',')
+            if len(val) != 2:
+                scrapper2.error_out("ini file is ill formed .Jobs must be tuples of (URL, task)")
+            jobs.append(val)
+
+    return jobs
 #----------Utilities-END------------------------------------
 
 
@@ -78,11 +96,18 @@ if __name__ == "__main__":
         if doctest.testmod()[0] == 0:
             scrapper2.post_success("All tests passed")
     else:
-        if len(args.root_jobs) < 1:
+        has_ini_file = os.path.isfile("scrapper2_jobs.ini")
+
+        if len(args.root_jobs) < 1 and not has_ini_file:
             scrapper2.error_out("No jobs specified. Please specify at least one job")
+
+        ini_jobs = get_jobs_from_ini("scrapper2_jobs.ini")
 
         scrapper2.post_info("Root jobs:")
         for url, task in args.root_jobs:
+            scrapper2.post_info("    " + url + " - " + task)
+
+        for url, task in ini_jobs:
             scrapper2.post_info("    " + url + " - " + task)
 
         a_threads = args.num_threads[0] if isinstance(args.num_threads, list) else args.num_threads
@@ -97,6 +122,9 @@ if __name__ == "__main__":
 
         root_jobs = []
         for url, task in args.root_jobs:
+            root_jobs.append((url, task, 0))
+
+        for url, task in ini_jobs:
             root_jobs.append((url, task, 0))
 
         scrapper2.post_info("Creating Scrapper...")
