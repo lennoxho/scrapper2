@@ -146,6 +146,9 @@ def std_download(request, url, id):
     path = url_info.path
     if path != '' and path[0] == '/':
         path = path[1:]
+    
+    if url_info.query != '':
+        path += url_info.query
 
     filename = os.path.join(url_info.netloc, path)
     filename = os.path.join("scrapper2_download", filename)
