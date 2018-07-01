@@ -53,7 +53,7 @@ class Scrapper:
     #--------Scrapper-Class-Utilities-END-------------
 
     def __init__(self, root_jobs, preprocess_func=templates.std_preprocess, traversal="DFS", num_threads=1,
-                 silent=False, log=True, colour=True, tenacious=True, initial_header=None):
+                 silent=False, log=True, colour=True, tenacious=True, additional_header=None, iptc_tags=dict()):
 
         if not isinstance(root_jobs, list) or \
            any(not (isinstance(entry, tuple) and len(entry) == 3) for entry in root_jobs) or \
@@ -84,6 +84,7 @@ class Scrapper:
         self.__modify_header_func = templates.std_modify_header
         self.__report_header_func = templates.std_report_header
         self.__nok_func = templates.std_nok
+        self.__iptc_tags = iptc_tags
         self.__retries = request_retry(total=2, backoff_factor=0.1)
         self.__timeout = 7
 
@@ -100,7 +101,7 @@ class Scrapper:
         self.__thread_pool = []
         try:
             for i in range(self.__num_threads):
-                self.__thread_pool.append(threading.Thread(target=self.scrape, args=(i, initial_header)))
+                self.__thread_pool.append(threading.Thread(target=self.scrape, args=(i, additional_header)))
                 post_info("Spawning thread " + str(i))
         except Exception as e:
             error_out(str(e))
@@ -127,10 +128,10 @@ class Scrapper:
             for job in remaining_jobs:
                 post_warning("      " + str(job[0]) + " - " + str(job[1]))
 
-    def scrape(self, i, initial_header):
+    def scrape(self, i, additional_header):
         self.post(post_info, "thread " + str(i) + " starting")
 
-        curr_session = ScrapperSession(initial_header, self.__retries)
+        curr_session = ScrapperSession(additional_header, self.__retries)
         url, task, id = None, None, None
         curr_header = None
 
@@ -158,7 +159,7 @@ class Scrapper:
                         if jobs != []:
                             self.__scrapper_jobs.add_job(jobs)
                     if task == "download" or task == "both":
-                        success = success and self.__download_func(r, url, id)
+                        success = success and self.__download_func(r, url, id, self.__iptc_tags)
 
                 curr_header = curr_session.get_header()
                 self.__report_header_func(curr_header, success, url, task, id)
@@ -217,7 +218,7 @@ class Scrapper:
 
     def set_download_func(self, func):
         assert not self.__threads_started
-        if len(inspect.getargspec(func)[0]) != 3:
+        if len(inspect.getargspec(func)[0]) != 4:
             error_out("Download callback function is not well formed")
         self.__download_func = func
 
@@ -254,11 +255,11 @@ class Scrapper:
 #----------ScrapperSession-Class-Definition-START-----------
 class ScrapperSession:
 
-    def __init__(self, initial_header, retries):
+    def __init__(self, additional_header, retries):
         self.__session = requests.Session()
         self.__session.mount("http://", HTTPAdapter(max_retries=retries))
-        if initial_header is not None:
-            self.__session.headers = initial_header
+        if additional_header is not None:
+            self.__session.headers.update(additional_header)
 
     def get(self, url, timeout):
         return self.__session.get(url, timeout=timeout)

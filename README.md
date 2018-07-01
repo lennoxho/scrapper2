@@ -3,3 +3,4 @@ A template-based Web Scrapper module and command line application written in Pyt
 
 - Requires BeautifulSoup
 - Requires colorama
+- Requires pyexiv2

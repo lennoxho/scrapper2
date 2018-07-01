@@ -1,6 +1,7 @@
 #----------Import-Modules-START-----------------------------
 import os
 import posixpath
+import pyexiv2
 import urllib.parse
 import threading
 
@@ -140,15 +141,12 @@ def std_visit_template(request, base_url, id, jobs, links_to_visit, links_to_dow
 
     return True
 
-def std_download(request, url, id):
+def std_download(request, url, id, iptc_tags):
     url_info = urllib.parse.urlsplit(url)
 
     path = url_info.path
     if path != '' and path[0] == '/':
         path = path[1:]
-    
-    if url_info.query != '':
-        path += url_info.query
 
     filename = os.path.join(url_info.netloc, path)
     filename = os.path.join("scrapper2_download", filename)
@@ -160,17 +158,24 @@ def std_download(request, url, id):
     if dirname != "" and not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    if os.path.isfile(filename):
-        __file_lock.release()
-        return True
+    if not os.path.isfile(filename):
+        hfile = open(filename, 'wb')
+        for chunk in request.iter_content(chunk_size=__std_chunk_size):
+            if chunk:
+                hfile.write(chunk)
+        hfile.close()
 
-    hfile = open(filename, 'wb')
-    for chunk in request.iter_content(chunk_size=__std_chunk_size):
-        if chunk:
-            hfile.write(chunk)
     __file_lock.release()
 
-    hfile.close()
+    # Write metadata
+    meta = pyexiv2.ImageMetadata(filename)
+    meta.read()
+
+    for tag in iptc_tags:
+        meta[tag] = pyexiv2.IptcTag(tag, iptc_tags[tag])
+
+    meta.write()
+
     return True
 
 def std_modify_header(header, url, task, id):
