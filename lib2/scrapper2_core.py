@@ -293,60 +293,49 @@ class ScrapperJobs:
         assert all((isinstance(job, tuple) and \
                     len(job) == 3 and \
                     job[1] in _valid_tasks) for job in jobs)
-        self.__job_lock.acquire()
-        self.__container.extend(jobs)
-        self.__cv.notify_all()
-        self.__job_lock.release()
+        with self.__cv:
+            self.__container.extend(jobs)
+            self.__cv.notify_all()
 
     def empty(self):
-        self.__job_lock.acquire()
-        empty = len(self.__container) == 0
-        self.__job_lock.release()
-        return empty
+        with self.__job_lock:
+            return len(self.__container) == 0
 
     def get_job(self):
-        self.__job_lock.acquire()
+        with self.__cv:
+            while len(self.__container) == 0 and not self.__signal_done:
+                self.__cv.wait()
 
-        while len(self.__container) == 0 and not self.__signal_done:
-            self.__cv.wait()
-
-        if not self.__signal_done:
-            if self.__traversal == "DFS":
-                job = self.__container.pop()
+            if not self.__signal_done:
+                if self.__traversal == "DFS":
+                    job = self.__container.pop()
+                else:
+                    job = self.__container.popleft()
+                self.__current_jobs.add(job)
             else:
-                job = self.__container.popleft()
-            self.__current_jobs.add(job)
-        else:
-            job = None
+                job = None
 
-        self.__job_lock.release()
-        return job
+            return job
 
     def done_job(self, job):
         '''
         Make sure new job is added before calling done_job.
         '''
-        self.__job_lock.acquire()
-        self.__current_jobs.remove(job)
-        if len(self.__current_jobs) == 0 and len(self.__container) == 0:
-            self.__signal_done = True
-            self.__cv.notify_all()
-        self.__job_lock.release()
+        with self.__cv:
+            self.__current_jobs.remove(job)
+            if len(self.__current_jobs) == 0 and len(self.__container) == 0:
+                self.__signal_done = True
+                self.__cv.notify_all()
 
     def is_done(self):
-        self.__job_lock.acquire()
-        ret = self.__signal_done
-        self.__job_lock.release()
-        return ret
+        with self.__job_lock:
+            return self.__signal_done
 
     def signal_exit(self):
-        self.__job_lock.acquire()
-        self.__cv.notify_all()
-        self.__job_lock.release()
+        with self.__cv:
+            self.__cv.notify_all()
 
     def curr_jobs(self):
-        self.__job_lock.acquire()
-        jobs = self.__current_jobs
-        self.__job_lock.release()
-        return jobs
+        with self.__job_lock:
+            return self.__current_jobs
 #----------ScrapperJobs-Class-Definition-END----------------
